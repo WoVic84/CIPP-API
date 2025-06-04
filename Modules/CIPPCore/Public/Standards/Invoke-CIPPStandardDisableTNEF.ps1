@@ -25,7 +25,7 @@ function Invoke-CIPPStandardDisableTNEF {
         UPDATECOMMENTBLOCK
             Run the Tools\Update-StandardsComments.ps1 script to update this comment block
     .LINK
-        https://docs.cipp.app/user-documentation/tenant/standards/list-standards/exchange-standards#low-impact
+        https://docs.cipp.app/user-documentation/tenant/standards/list-standards
     #>
 
     param ($Tenant, $Settings)
@@ -38,7 +38,7 @@ function Invoke-CIPPStandardDisableTNEF {
 
         if ($CurrentState.TNEFEnabled -ne $false) {
             try {
-                New-ExoRequest -tenantid $Tenant -cmdlet 'Set-RemoteDomain' -cmdParams @{Identity = 'Default'; TNEFEnabled = $false } -useSystemmailbox $true
+                New-ExoRequest -tenantid $Tenant -cmdlet 'Set-RemoteDomain' -cmdParams @{Identity = 'Default'; TNEFEnabled = $false } -useSystemMailbox $true
                 Write-LogMessage -API 'Standards' -tenant $tenant -message 'Disabled TNEF for Default Remote Domain' -sev Info
             } catch {
                 $ErrorMessage = Get-NormalizedError -Message $_.Exception.Message

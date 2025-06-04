@@ -29,19 +29,19 @@ function Invoke-CIPPStandardEXODisableAutoForwarding {
         UPDATECOMMENTBLOCK
             Run the Tools\Update-StandardsComments.ps1 script to update this comment block
     .LINK
-        https://docs.cipp.app/user-documentation/tenant/standards/list-standards/exchange-standards#high-impact
+        https://docs.cipp.app/user-documentation/tenant/standards/list-standards
     #>
 
     param($Tenant, $Settings)
     ##$Rerun -Type Standard -Tenant $Tenant -Settings $Settings 'EXODisableAutoForwarding'
 
-    $CurrentInfo = New-ExoRequest -tenantid $Tenant -cmdlet 'Get-HostedOutboundSpamFilterPolicy' -cmdparams @{Identity = 'Default' } -useSystemMailbox $true
+    $CurrentInfo = New-ExoRequest -tenantid $Tenant -cmdlet 'Get-HostedOutboundSpamFilterPolicy' -cmdParams @{Identity = 'Default' } -useSystemMailbox $true
     $StateIsCorrect = $CurrentInfo.AutoForwardingMode -eq 'Off'
 
     If ($Settings.remediate -eq $true) {
 
         try {
-            New-ExoRequest -tenantid $tenant -cmdlet 'Set-HostedOutboundSpamFilterPolicy' -cmdparams @{ Identity = 'Default'; AutoForwardingMode = 'Off' } -useSystemMailbox $true
+            New-ExoRequest -tenantid $tenant -cmdlet 'Set-HostedOutboundSpamFilterPolicy' -cmdParams @{ Identity = 'Default'; AutoForwardingMode = 'Off' } -useSystemMailbox $true
             Write-LogMessage -API 'Standards' -tenant $tenant -message 'Disabled auto forwarding' -sev Info
         } catch {
             $ErrorMessage = Get-CippException -Exception $_

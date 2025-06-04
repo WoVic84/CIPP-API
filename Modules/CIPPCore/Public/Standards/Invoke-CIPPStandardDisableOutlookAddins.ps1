@@ -27,7 +27,7 @@ function Invoke-CIPPStandardDisableOutlookAddins {
         UPDATECOMMENTBLOCK
             Run the Tools\Update-StandardsComments.ps1 script to update this comment block
     .LINK
-        https://docs.cipp.app/user-documentation/tenant/standards/list-standards/exchange-standards#medium-impact
+        https://docs.cipp.app/user-documentation/tenant/standards/list-standards
     #>
 
     param($Tenant, $Settings)
@@ -47,8 +47,8 @@ function Invoke-CIPPStandardDisableOutlookAddins {
 
             foreach ($Role in $RolesToRemove) {
                 try {
-                    New-ExoRequest -tenantid $Tenant -cmdlet 'Get-ManagementRoleAssignment' -cmdparams @{ RoleAssignee = $CurrentInfo.Identity; Role = $Role } | ForEach-Object {
-                        New-ExoRequest -tenantid $Tenant -cmdlet 'Remove-ManagementRoleAssignment' -cmdparams @{ Identity = $_.Guid; Confirm = $false } -UseSystemMailbox $true
+                    New-ExoRequest -tenantid $Tenant -cmdlet 'Get-ManagementRoleAssignment' -cmdParams @{ RoleAssignee = $CurrentInfo.Identity; Role = $Role } | ForEach-Object {
+                        New-ExoRequest -tenantid $Tenant -cmdlet 'Remove-ManagementRoleAssignment' -cmdParams @{ Identity = $_.Guid; Confirm = $false } -UseSystemMailbox $true
                         Write-LogMessage -API 'Standards' -tenant $tenant -message "Disabled Outlook add-in role: $Role" -sev Debug
                     }
                 } catch {

@@ -16,6 +16,7 @@ function Invoke-CIPPStandardSpoofWarn {
             "CIS"
         ADDEDCOMPONENT
             {"type":"autoComplete","multiple":false,"label":"Select value","name":"standards.SpoofWarn.state","options":[{"label":"Enabled","value":"enabled"},{"label":"Disabled","value":"disabled"}]}
+            {"type":"autoComplete","multiple":true,"creatable":true,"required":false,"label":"Enter allowed senders(domain.com, *.domain.com or test@domain.com)","name":"standards.SpoofWarn.AllowListAdd"}
         IMPACT
             Low Impact
         ADDEDDATE
@@ -28,7 +29,7 @@ function Invoke-CIPPStandardSpoofWarn {
         UPDATECOMMENTBLOCK
             Run the Tools\Update-StandardsComments.ps1 script to update this comment block
     .LINK
-        https://docs.cipp.app/user-documentation/tenant/standards/list-standards/exchange-standards#low-impact
+        https://docs.cipp.app/user-documentation/tenant/standards/list-standards
     #>
 
     param($Tenant, $Settings)

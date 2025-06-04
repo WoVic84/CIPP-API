@@ -13,7 +13,7 @@ function Invoke-CIPPStandardTransportRuleTemplate {
         CAT
             Templates
         DISABLEDFEATURES
-            
+            {"report":true,"warn":true,"remediate":false}
         IMPACT
             Medium Impact
         ADDEDDATE
@@ -23,7 +23,7 @@ function Invoke-CIPPStandardTransportRuleTemplate {
         UPDATECOMMENTBLOCK
             Run the Tools\Update-StandardsComments.ps1 script to update this comment block
     .LINK
-        https://docs.cipp.app/user-documentation/tenant/standards/list-standards/
+        https://docs.cipp.app/user-documentation/tenant/standards/list-standards
     #>
     param($Tenant, $Settings)
     ##$Rerun -Type Standard -Tenant $Tenant -Settings $Settings 'TransportRuleTemplate'
@@ -51,10 +51,10 @@ function Invoke-CIPPStandardTransportRuleTemplate {
                     Write-LogMessage -API 'Standards' -tenant $tenant -message "Successfully created transport rule for $tenant" -sev 'Info'
                 }
 
-                Write-LogMessage -API $APINAME -tenant $Tenant -message "Created transport rule for $($tenantfilter)" -sev 'Debug'
+                Write-LogMessage -API $APINAME -tenant $Tenant -message "Created transport rule for $($tenantFilter)" -sev 'Debug'
             } catch {
                 $ErrorMessage = Get-NormalizedError -Message $_.Exception.Message
-                Write-LogMessage -API 'Standards' -tenant $tenant -message "Could not create transport rule for $($tenantfilter): $ErrorMessage" -sev 'Error'
+                Write-LogMessage -API 'Standards' -tenant $tenant -message "Could not create transport rule for $($tenantFilter): $ErrorMessage" -sev 'Error'
             }
         }
     }

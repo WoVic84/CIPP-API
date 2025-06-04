@@ -1,6 +1,6 @@
 using namespace System.Net
 
-Function Invoke-ListConditionalAccessPolicies {
+function Invoke-ListConditionalAccessPolicies {
     <#
     .FUNCTIONALITY
         Entrypoint
@@ -11,7 +11,8 @@ Function Invoke-ListConditionalAccessPolicies {
     param($Request, $TriggerMetadata)
 
     $APIName = $Request.Params.CIPPEndpoint
-    Write-LogMessage -headers $Request.Headers -API $APIName -message 'Accessed this API' -Sev 'Debug'
+    $Headers = $Request.Headers
+    Write-LogMessage -headers $Headers -API $APIName -message 'Accessed this API' -Sev 'Debug'
 
 
     function Get-LocationNameFromId {
@@ -163,6 +164,7 @@ Function Invoke-ListConditionalAccessPolicies {
         $AllRoleDefinitions = ($GraphRequest | Where-Object { $_.id -eq 'roleDefinitions' }).body.value
         $GroupListOutput = ($GraphRequest | Where-Object { $_.id -eq 'groups' }).body.value
         $UserListOutput = ($GraphRequest | Where-Object { $_.id -eq 'users' }).body.value
+        $AllServicePrincipals = ($GraphRequest | Where-Object { $_.id -eq 'servicePrincipals' }).body.value
 
 
         $GraphRequest = foreach ($cap in $ConditionalAccessPolicyOutput) {
@@ -170,7 +172,7 @@ Function Invoke-ListConditionalAccessPolicies {
                 id                                          = $cap.id
                 displayName                                 = $cap.displayName
                 customer                                    = $cap.Customer
-                tenantID                                    = $cap.TenantID
+                tenantID                                    = $TenantFilter
                 createdDateTime                             = $(if (![string]::IsNullOrEmpty($cap.createdDateTime)) { [datetime]$cap.createdDateTime } else { '' })
                 modifiedDateTime                            = $(if (![string]::IsNullOrEmpty($cap.modifiedDateTime)) { [datetime]$cap.modifiedDateTime }else { '' })
                 state                                       = $cap.state
@@ -179,8 +181,8 @@ Function Invoke-ListConditionalAccessPolicies {
                 excludePlatforms                            = ($cap.conditions.platforms.excludePlatforms) -join ','
                 includeLocations                            = (Get-LocationNameFromId -Locations $AllNamedLocations -id $cap.conditions.locations.includeLocations) -join ','
                 excludeLocations                            = (Get-LocationNameFromId -Locations $AllNamedLocations -id $cap.conditions.locations.excludeLocations) -join ','
-                includeApplications                         = ($cap.conditions.applications.includeApplications | ForEach-Object { Get-ApplicationNameFromId -Applications $AllApplications -id $_ }) -join ','
-                excludeApplications                         = ($cap.conditions.applications.excludeApplications | ForEach-Object { Get-ApplicationNameFromId -Applications $AllApplications -id $_ }) -join ','
+                includeApplications                         = ($cap.conditions.applications.includeApplications | ForEach-Object { Get-ApplicationNameFromId -Applications $AllApplications -ServicePrincipals $AllServicePrincipals -id $_ }) -join ','
+                excludeApplications                         = ($cap.conditions.applications.excludeApplications | ForEach-Object { Get-ApplicationNameFromId -Applications $AllApplications -ServicePrincipals $AllServicePrincipals -id $_ }) -join ','
                 includeUserActions                          = ($cap.conditions.applications.includeUserActions | Out-String)
                 includeAuthenticationContextClassReferences = ($cap.conditions.applications.includeAuthenticationContextClassReferences | Out-String)
                 includeUsers                                = ($cap.conditions.users.includeUsers | ForEach-Object { Get-UserNameFromId -Users $UserListOutput -id $_ }) | Out-String

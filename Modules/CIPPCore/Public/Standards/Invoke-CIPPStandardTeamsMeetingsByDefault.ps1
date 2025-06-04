@@ -14,7 +14,7 @@ function Invoke-CIPPStandardTeamsMeetingsByDefault {
             Exchange Standards
         TAG
         ADDEDCOMPONENT
-            {"type":"autoComplete","multiple":false,"label":"Select value","name":"standards.TeamsMeetingsByDefault.state","options":[{"label":"Enabled","value":"true"},{"label":"Disabled","value":"false"}]}
+            {"type":"autoComplete","multiple":false,"creatable":false,"label":"Select value","name":"standards.TeamsMeetingsByDefault.state","options":[{"label":"Enabled","value":"true"},{"label":"Disabled","value":"false"}]}
         IMPACT
             Low Impact
         ADDEDDATE
@@ -25,7 +25,7 @@ function Invoke-CIPPStandardTeamsMeetingsByDefault {
         UPDATECOMMENTBLOCK
             Run the Tools\Update-StandardsComments.ps1 script to update this comment block
     .LINK
-        https://docs.cipp.app/user-documentation/tenant/standards/list-standards/exchange-standards#low-impact
+        https://docs.cipp.app/user-documentation/tenant/standards/list-standards
     #>
 
     param($Tenant, $Settings)

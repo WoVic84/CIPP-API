@@ -1,6 +1,6 @@
 using namespace System.Net
 
-Function Invoke-ExecCPVPermissions {
+function Invoke-ExecCPVPermissions {
     <#
     .FUNCTIONALITY
         Entrypoint
@@ -15,7 +15,7 @@ Function Invoke-ExecCPVPermissions {
     Write-LogMessage -headers $Headers -API $APIName -message 'Accessed this API' -Sev 'Debug'
     $TenantFilter = $Request.Body.tenantFilter
 
-    $Tenant = Get-Tenants -IncludeAll | Where-Object -Property customerId -EQ $TenantFilter | Select-Object -First 1
+    $Tenant = Get-Tenants -TenantFilter $TenantFilter -IncludeErrors
 
     if ($Tenant) {
         Write-Host "Our tenant is $($Tenant.displayName) - $($Tenant.defaultDomainName)"
@@ -37,8 +37,8 @@ Function Invoke-ExecCPVPermissions {
                     defaultDomainName = $env:TenantID
                 }
             }
-            Add-CIPPApplicationPermission -RequiredResourceAccess 'CIPPDefaults' -ApplicationId $ENV:ApplicationID -tenantfilter $TenantFilter
-            Add-CIPPDelegatedPermission -RequiredResourceAccess 'CIPPDefaults' -ApplicationId $ENV:ApplicationID -tenantfilter $TenantFilter
+            Add-CIPPApplicationPermission -RequiredResourceAccess 'CIPPDefaults' -ApplicationId $env:ApplicationID -tenantfilter $TenantFilter
+            Add-CIPPDelegatedPermission -RequiredResourceAccess 'CIPPDefaults' -ApplicationId $env:ApplicationID -tenantfilter $TenantFilter
             if ($TenantFilter -notin @('PartnerTenant', $env:TenantID)) {
                 Set-CIPPSAMAdminRoles -TenantFilter $TenantFilter
             }

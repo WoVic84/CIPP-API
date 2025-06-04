@@ -1,6 +1,6 @@
 using namespace System.Net
 
-Function Invoke-ListGroupTemplates {
+function Invoke-ListGroupTemplates {
     <#
     .FUNCTIONALITY
         Entrypoint,AnyTenant
@@ -11,10 +11,10 @@ Function Invoke-ListGroupTemplates {
     param($Request, $TriggerMetadata)
 
     $APIName = $Request.Params.CIPPEndpoint
-    Write-LogMessage -headers $Request.Headers -API $APINAME -message 'Accessed this API' -Sev 'Debug'
+    $Headers = $Request.Headers
+    Write-LogMessage -headers $Headers -API $APIName -message 'Accessed this API' -Sev 'Debug'
 
-    # Write to the Azure Functions log stream.
-    Write-Host 'PowerShell HTTP trigger function processed a request.'
+
     Write-Host $Request.query.id
 
     #List new policies
@@ -22,8 +22,15 @@ Function Invoke-ListGroupTemplates {
     $Filter = "PartitionKey eq 'GroupTemplate'"
     $Templates = (Get-CIPPAzDataTableEntity @Table -Filter $Filter) | ForEach-Object {
         $data = $_.JSON | ConvertFrom-Json
-        $data | Add-Member -MemberType NoteProperty -Name GUID -Value $_.RowKey -Force
-        $data
+        [PSCustomObject]@{
+            displayName     = $data.displayName
+            description     = $data.description
+            groupType       = $data.groupType
+            membershipRules = $data.membershipRules
+            allowExternal   = $data.allowExternal
+            username        = $data.username
+            GUID            = $_.RowKey
+        }
     } | Sort-Object -Property displayName
 
     if ($Request.query.ID) { $Templates = $Templates | Where-Object -Property GUID -EQ $Request.query.id }

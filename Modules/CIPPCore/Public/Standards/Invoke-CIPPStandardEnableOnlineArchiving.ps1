@@ -24,7 +24,7 @@ function Invoke-CIPPStandardEnableOnlineArchiving {
         UPDATECOMMENTBLOCK
             Run the Tools\Update-StandardsComments.ps1 script to update this comment block
     .LINK
-        https://docs.cipp.app/user-documentation/tenant/standards/list-standards/exchange-standards#low-impact
+        https://docs.cipp.app/user-documentation/tenant/standards/list-standards
     #>
 
     param($Tenant, $Settings)
@@ -32,7 +32,7 @@ function Invoke-CIPPStandardEnableOnlineArchiving {
 
     $MailboxPlans = @( 'ExchangeOnline', 'ExchangeOnlineEnterprise' )
     $MailboxesNoArchive = $MailboxPlans | ForEach-Object {
-        New-ExoRequest -tenantid $Tenant -cmdlet 'Get-Mailbox' -cmdparams @{ MailboxPlan = $_; Filter = 'ArchiveGuid -Eq "00000000-0000-0000-0000-000000000000" -AND RecipientTypeDetails -Eq "UserMailbox"' }
+        New-ExoRequest -tenantid $Tenant -cmdlet 'Get-Mailbox' -cmdParams @{ MailboxPlan = $_; Filter = 'ArchiveGuid -Eq "00000000-0000-0000-0000-000000000000" -AND RecipientTypeDetails -Eq "UserMailbox"' }
         Write-Host "Getting mailboxes without Online Archiving for plan $_"
     }
 

@@ -25,11 +25,11 @@ function Invoke-CIPPStandardTeamsGlobalMeetingPolicy {
         POWERSHELLEQUIVALENT
             Set-CsTeamsMeetingPolicy -AllowAnonymousUsersToJoinMeeting \$false -AllowAnonymousUsersToStartMeeting \$false -AutoAdmittedUsers EveryoneInCompanyExcludingGuests -AllowPSTNUsersToBypassLobby \$false -MeetingChatEnabledType EnabledExceptAnonymous -DesignatedPresenterRoleMode \$DesignatedPresenterRoleMode -AllowExternalParticipantGiveRequestControl \$false
         RECOMMENDEDBY
-            "CIS 3.0"
+            "CIS"
         UPDATECOMMENTBLOCK
             Run the Tools\Update-StandardsComments.ps1 script to update this comment block
     .LINK
-        https://docs.cipp.app/user-documentation/tenant/standards/list-standards/teams-standards#low-impact
+        https://docs.cipp.app/user-documentation/tenant/standards/list-standards
     #>
     ##$Rerun -Type Standard -Tenant $Tenant -Settings $Settings 'TeamsGlobalMeetingPolicy'
 

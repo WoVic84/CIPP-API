@@ -22,11 +22,11 @@ function Invoke-CIPPStandardSPAzureB2B {
         POWERSHELLEQUIVALENT
             Set-SPOTenant -EnableAzureADB2BIntegration \$true
         RECOMMENDEDBY
-            "CIS 3.0"
+            "CIS"
         UPDATECOMMENTBLOCK
             Run the Tools\Update-StandardsComments.ps1 script to update this comment block
     .LINK
-        https://docs.cipp.app/user-documentation/tenant/standards/list-standards/sharepoint-standards#low-impact
+        https://docs.cipp.app/user-documentation/tenant/standards/list-standards
     #>
 
     param($Tenant, $Settings)

@@ -1,6 +1,6 @@
 using namespace System.Net
 
-Function Invoke-EditTenant {
+function Invoke-EditTenant {
     <#
     .FUNCTIONALITY
         Entrypoint,AnyTenant
@@ -11,8 +11,9 @@ Function Invoke-EditTenant {
     param($Request, $TriggerMetadata)
 
     $APIName = $Request.Params.CIPPEndpoint
+    $Headers = $Request.Headers
 
-    Write-LogMessage -headers $Request.Headers -API $APINAME -message 'Accessed this API' -Sev 'Debug'
+    Write-LogMessage -headers $Headers -API $APINAME -message 'Accessed this API' -Sev 'Debug'
 
     $customerId = $Request.Body.customerId
     $tenantAlias = $Request.Body.tenantAlias
@@ -40,14 +41,15 @@ Function Invoke-EditTenant {
             }
             $null = Add-CIPPAzDataTableEntity @PropertiesTable -Entity $aliasEntity -Force
             Write-Host "Setting alias to $tenantAlias"
+            $Tenant | Add-Member -NotePropertyName 'originalDisplayName' -NotePropertyValue $tenant.displayName -Force
             $Tenant.displayName = $tenantAlias
             $null = Add-CIPPAzDataTableEntity @TenantTable -Entity $Tenant -Force
         }
 
         # Update tenant groups
-        $CurrentMembers = Get-CIPPAzDataTableEntity @GroupMembersTable -Filter "customerId eq '$customerId'"
+        $CurrentGroupMemberships = Get-CIPPAzDataTableEntity @GroupMembersTable -Filter "customerId eq '$customerId'"
         foreach ($Group in $tenantGroups) {
-            $GroupEntity = $CurrentMembers | Where-Object { $_.GroupId -eq $Group.groupId }
+            $GroupEntity = $CurrentGroupMemberships | Where-Object { $_.GroupId -eq $Group.groupId }
             if (!$GroupEntity) {
                 $GroupEntity = @{
                     PartitionKey = 'Member'
@@ -60,8 +62,8 @@ Function Invoke-EditTenant {
         }
 
         # Remove any groups that are no longer selected
-        foreach ($Group in $CurrentMembers) {
-            if ($tenantGroups -notcontains $Group.GroupId) {
+        foreach ($Group in $CurrentGroupMemberships) {
+            if ($tenantGroups.GroupId -notcontains $Group.GroupId) {
                 Remove-AzDataTableEntity @GroupMembersTable -Entity $Group
             }
         }
@@ -75,7 +77,7 @@ Function Invoke-EditTenant {
                 Body       = $response
             })
     } catch {
-        Write-LogMessage -headers $Request.Headers -tenant $customerId -API $APINAME -message "Edit Tenant failed. The error is: $($_.Exception.Message)" -Sev 'Error'
+        Write-LogMessage -headers $Headers -tenant $customerId -API $APINAME -message "Edit Tenant failed. The error is: $($_.Exception.Message)" -Sev 'Error'
         $response = @{
             state      = 'error'
             resultText = $_.Exception.Message
