@@ -1,5 +1,3 @@
-using namespace System.Net
-
 Function Invoke-ExecTokenExchange {
     <#
     .FUNCTIONALITY
@@ -34,14 +32,14 @@ Function Invoke-ExecTokenExchange {
         # Make sure we get the latest authentication
         $auth = Get-CIPPAuthentication
 
-        if ($env:AzureWebJobsStorage -eq 'UseDevelopmentStorage=true') {
+        if ($env:AzureWebJobsStorage -eq 'UseDevelopmentStorage=true' -or $env:NonLocalHostAzurite -eq 'true') {
             $DevSecretsTable = Get-CIPPTable -tablename 'DevSecrets'
             $Secret = Get-CIPPAzDataTableEntity @DevSecretsTable -Filter "PartitionKey eq 'Secret' and RowKey eq 'Secret'"
             $ClientSecret = $Secret.applicationsecret
             Write-LogMessage -API $APIName -message 'Retrieved client secret from development secrets' -Sev 'Info'
         } else {
             try {
-                $ClientSecret = (Get-AzKeyVaultSecret -VaultName $kv -Name 'applicationsecret' -AsPlainText)
+                $ClientSecret = (Get-CippKeyVaultSecret -VaultName $kv -Name 'applicationsecret' -AsPlainText)
                 Write-LogMessage -API $APIName -message 'Retrieved client secret from key vault' -Sev 'Info'
             } catch {
                 Write-LogMessage -API $APIName -message "Failed to retrieve client secret: $($_.Exception.Message)" -Sev 'Error'
@@ -75,13 +73,13 @@ Function Invoke-ExecTokenExchange {
         }
     }
     if ($Results.error) {
-        Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
+        return ([HttpResponseContext]@{
                 StatusCode = [HttpStatusCode]::BadRequest
                 Body       = $Results
                 Headers    = @{'Content-Type' = 'application/json' }
             })
     } else {
-        Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
+        return ([HttpResponseContext]@{
                 StatusCode = [HttpStatusCode]::OK
                 Body       = $Results
                 Headers    = @{'Content-Type' = 'application/json' }

@@ -1,5 +1,3 @@
-using namespace System.Net
-
 function Invoke-ListMailboxRules {
     <#
     .FUNCTIONALITY
@@ -9,11 +7,6 @@ function Invoke-ListMailboxRules {
     #>
     [CmdletBinding()]
     param($Request, $TriggerMetadata)
-
-    $APIName = $Request.Params.CIPPEndpoint
-    $Headers = $Request.Headers
-    Write-LogMessage -headers $Headers -API $APIName -message 'Accessed this API' -Sev 'Debug'
-
     # Interact with query parameters or the body of the request.
     $TenantFilter = $Request.Query.tenantFilter
 
@@ -37,9 +30,6 @@ function Invoke-ListMailboxRules {
         $Metadata = [PSCustomObject]@{
             QueueMessage = "Still loading data for $TenantFilter. Please check back in a few more minutes"
             QueueId      = $RunningQueue.RowKey
-        }
-        [PSCustomObject]@{
-            Waiting = $true
         }
     } elseif ((!$Rows -and !$RunningQueue) -or ($TenantFilter -eq 'AllTenants' -and ($Rows | Measure-Object).Count -eq 1)) {
         Write-Information "No cached mailbox rules found for $TenantFilter, starting new orchestration"
@@ -65,7 +55,7 @@ function Invoke-ListMailboxRules {
                 SkipLog          = $true
             }
             #Write-Host ($InputObject | ConvertTo-Json)
-            $InstanceId = Start-NewOrchestration -FunctionName 'CIPPOrchestrator' -InputObject ($InputObject | ConvertTo-Json -Depth 5 -Compress)
+            Start-NewOrchestration -FunctionName 'CIPPOrchestrator' -InputObject ($InputObject | ConvertTo-Json -Depth 5 -Compress)
             Write-Host "Started mailbox rules orchestration with ID = '$InstanceId'"
         }
 
@@ -87,7 +77,7 @@ function Invoke-ListMailboxRules {
         Metadata = $Metadata
     }
 
-    Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
+    return ([HttpResponseContext]@{
             StatusCode = [HttpStatusCode]::OK
             Body       = $Body
         })

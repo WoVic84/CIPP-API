@@ -1,5 +1,3 @@
-using namespace System.Net
-
 function Invoke-ExecOffboardUser {
     <#
     .FUNCTIONALITY
@@ -16,7 +14,7 @@ function Invoke-ExecOffboardUser {
         try {
             $APIName = 'ExecOffboardUser'
             $Headers = $Request.Headers
-            Write-LogMessage -headers $Headers -API $APIName -message 'Accessed this API' -Sev 'Debug'
+
 
             if ($Request.Body.Scheduled.enabled) {
                 $taskObject = [PSCustomObject]@{
@@ -37,6 +35,7 @@ function Invoke-ExecOffboardUser {
                         Email   = [bool]$Request.Body.PostExecution.email
                         PSA     = [bool]$Request.Body.PostExecution.psa
                     }
+                    Reference     = $Request.Body.reference
                 }
                 Add-CIPPScheduledTask -Task $taskObject -hidden $false -Headers $Headers
             } else {
@@ -50,7 +49,7 @@ function Invoke-ExecOffboardUser {
         }
     }
     $body = [pscustomobject]@{'Results' = @($Results) }
-    Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
+    return ([HttpResponseContext]@{
             StatusCode = $StatusCode
             Body       = $Body
         })

@@ -36,12 +36,22 @@ function New-GraphGetRequest {
         if ($ComplexFilter) {
             $headers['ConsistencyLevel'] = 'eventual'
         }
+
+        if ($script:XMsThrottlePriority) {
+            $headers['x-ms-throttle-priority'] = $script:XMsThrottlePriority
+        }
+
         $nextURL = $uri
         if ($extraHeaders) {
             foreach ($key in $extraHeaders.Keys) {
                 $headers[$key] = $extraHeaders[$key]
             }
         }
+
+        if (!$headers['User-Agent']) {
+            $headers['User-Agent'] = "CIPP/$($global:CippVersion ?? '1.0')"
+        }
+
         # Track consecutive Graph API failures
         $TenantsTable = Get-CippTable -tablename Tenants
         $Filter = "PartitionKey eq 'Tenants' and (defaultDomainName eq '{0}' or customerId eq '{0}')" -f $tenantid
@@ -68,28 +78,35 @@ function New-GraphGetRequest {
                         Headers     = $headers
                         ContentType = 'application/json; charset=utf-8'
                     }
-                    if ($IncludeResponseHeaders) {
-                        $GraphRequest.ResponseHeadersVariable = 'ResponseHeaders'
-                    }
 
                     if ($ReturnRawResponse) {
                         $GraphRequest.SkipHttpErrorCheck = $true
                         $Data = Invoke-WebRequest @GraphRequest
                     } else {
+                        $GraphRequest.ResponseHeadersVariable = 'ResponseHeaders'
                         $Data = (Invoke-RestMethod @GraphRequest)
+                        $script:LastGraphResponseHeaders = $ResponseHeaders
                     }
 
                     # If we reach here, the request was successful
                     $RequestSuccessful = $true
 
                     if ($ReturnRawResponse) {
-                        if (Test-Json -Json $Data.Content) {
-                            $Content = $Data.Content | ConvertFrom-Json
-                        } else {
+                        try {
+                            if ($Data.Content -and (Test-Json -Json $Data.Content -ErrorAction Stop)) {
+                                $Content = $Data.Content | ConvertFrom-Json
+                            } else {
+                                $Content = $Data.Content
+                            }
+                        } catch {
                             $Content = $Data.Content
                         }
 
-                        $Data | Select-Object -Property StatusCode, StatusDescription, @{Name = 'Content'; Expression = { $Content } }
+                        [PSCustomObject]@{
+                            StatusCode        = $Data.StatusCode
+                            StatusDescription = $Data.StatusDescription
+                            Content           = $Content
+                        }
                         $nextURL = $null
                     } elseif ($CountOnly) {
                         $Data.'@odata.count'
@@ -148,7 +165,7 @@ function New-GraphGetRequest {
                     # Check for "Resource temporarily unavailable"
                     elseif ($Message -like '*Resource temporarily unavailable*') {
                         if ($RetryCount -lt $MaxRetries) {
-                            $WaitTime = Get-Random -Minimum 1 -Maximum 10  # Random sleep between 1-10 seconds
+                            $WaitTime = Get-Random -Minimum 1.1 -Maximum 3.1  # Random sleep between 1-2 seconds
                             Write-Warning "Resource temporarily unavailable. Waiting $WaitTime seconds before retry. Attempt $($RetryCount + 1) of $MaxRetries"
                             $ShouldRetry = $true
                         }
