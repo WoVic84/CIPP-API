@@ -8,6 +8,9 @@ function Set-CIPPFeatureFlag {
         The ID of the feature flag to update
     .PARAMETER Enabled
         The new enabled state for the feature flag (true/false)
+    .PARAMETER Force
+        Set the flag even when AllowUserToggle is false. For system-driven flags that are
+        managed by a specific flow (e.g. the Setup Wizard) rather than the user settings page.
     .FUNCTIONALITY
         Internal
     #>
@@ -17,13 +20,14 @@ function Set-CIPPFeatureFlag {
         [string]$Id,
 
         [Parameter(Mandatory = $true)]
-        [bool]$Enabled
+        [bool]$Enabled,
+
+        [switch]$Force
     )
 
     try {
         # Get feature flags from JSON to validate
-        $FeatureFlagsPath = Join-Path -Path $PSScriptRoot -ChildPath '../lib/data/FeatureFlags.json'
-        $FeatureFlags = Get-Content -Path $FeatureFlagsPath -Raw | ConvertFrom-Json
+        $FeatureFlags = [System.IO.File]::ReadAllText((Join-Path $env:CIPPRootPath 'Config\FeatureFlags.json')) | ConvertFrom-Json
 
         # Find the requested feature flag in JSON
         $FeatureFlag = $FeatureFlags | Where-Object { $_.Id -eq $Id }
@@ -33,8 +37,8 @@ function Set-CIPPFeatureFlag {
             return $false
         }
 
-        # Check if user toggle is allowed
-        if (-not $FeatureFlag.AllowUserToggle) {
+        # -Force bypasses the user-toggle guard for system-managed flags (e.g. set by the Setup Wizard).
+        if (-not $FeatureFlag.AllowUserToggle -and -not $Force) {
             Write-Warning "Feature flag '$Id' does not allow user toggling"
             return $false
         }
@@ -50,7 +54,7 @@ function Set-CIPPFeatureFlag {
                 LastModified = (Get-Date).ToUniversalTime().ToString('o')
             }
 
-            $Result = Add-CIPPAzDataTableEntity @Table -Entity $Entity -Force
+            $null = Add-CIPPAzDataTableEntity @Table -Entity $Entity -Force
 
             Write-Information "Feature flag '$Id' set to $Enabled"
             return $true

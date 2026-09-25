@@ -7,7 +7,8 @@ function Add-CIPPDelegatedPermission {
         $NoTranslateRequired,
         $TenantFilter
     )
-    Write-Host 'Adding Delegated Permissions'
+    Write-Information 'Adding Delegated Permissions'
+    $ApplicationId = $ApplicationId ?? $env:ApplicationID
     Set-Location (Get-Item $PSScriptRoot).FullName
 
     if ($ApplicationId -eq $env:ApplicationID -and $TenantFilter -eq $env:TenantID) {
@@ -44,11 +45,9 @@ function Add-CIPPDelegatedPermission {
     } else {
         if (!$RequiredResourceAccess -and $TemplateId) {
             Write-Information "Adding delegated permissions for template $TemplateId"
-            $TemplateTable = Get-CIPPTable -TableName 'templates'
-            $Filter = "RowKey eq '$TemplateId' and PartitionKey eq 'AppApprovalTemplate'"
-            $Template = (Get-CIPPAzDataTableEntity @TemplateTable -Filter $Filter).JSON | ConvertFrom-Json -ErrorAction SilentlyContinue
-            $ApplicationId = $Template.AppId
-            $Permissions = $Template.Permissions
+            $TemplatePermissions = Get-CIPPAppApprovalPermissions -TemplateId $TemplateId
+            $ApplicationId = $TemplatePermissions.ApplicationId
+            $Permissions = $TemplatePermissions.Permissions
             $NoTranslateRequired = $true
             $RequiredResourceAccess = [System.Collections.Generic.List[object]]::new()
             foreach ($AppId in $Permissions.PSObject.Properties.Name) {
@@ -69,13 +68,21 @@ function Add-CIPPDelegatedPermission {
         }
     }
 
-    $ModuleBase = Get-Module -Name CIPPCore | Select-Object -ExpandProperty ModuleBase
-    $Translator = Get-Content (Join-Path $ModuleBase 'lib\data\PermissionsTranslator.json') | ConvertFrom-Json
+    $Translator = Get-Content (Join-Path $env:CIPPRootPath 'Config\PermissionsTranslator.json') | ConvertFrom-Json
     $ServicePrincipalList = New-GraphGETRequest -uri "https://graph.microsoft.com/beta/servicePrincipals?`$select=appId,id,displayName&`$top=999" -tenantid $TenantFilter -skipTokenCache $true -NoAuthCheck $true
-    $ourSVCPrincipal = $ServicePrincipalList | Where-Object -Property appId -EQ $ApplicationId
     $Results = [System.Collections.Generic.List[string]]::new()
 
+    $ourSVCPrincipal = $ServicePrincipalList | Where-Object -Property AppId -EQ $ApplicationId | Select-Object -First 1
+    if (!$ourSVCPrincipal) {
+        $ourSvcPrincipal = New-GraphGETRequest -uri "https://graph.microsoft.com/beta/servicePrincipals(appId='$ApplicationId')?`$select=appId,id,displayName" -tenantid $TenantFilter -skipTokenCache $true -NoAuthCheck $true
+    }
+    if (!$ourSVCPrincipal) {
+        $Results.Add("Failed to find service principal for application $ApplicationId in tenant $TenantFilter")
+        return $Results
+    }
+
     $CurrentDelegatedScopes = New-GraphGETRequest -uri "https://graph.microsoft.com/beta/servicePrincipals/$($ourSVCPrincipal.id)/oauth2PermissionGrants" -skipTokenCache $true -tenantid $TenantFilter -NoAuthCheck $true
+    $ChangedResources = [System.Collections.Generic.List[string]]::new()
 
     foreach ($App in $RequiredResourceAccess) {
         if (!$App) {
@@ -128,6 +135,7 @@ function Add-CIPPDelegatedPermission {
                 } | ConvertTo-Json -Compress
                 $CreateRequest = New-GraphPOSTRequest -uri 'https://graph.microsoft.com/v1.0/oauth2PermissionGrants' -tenantid $TenantFilter -body $Createbody -type POST -NoAuthCheck $true
                 $Results.add("Successfully added permissions for $($svcPrincipalId.displayName)")
+                $ChangedResources.Add("$($svcPrincipalId.displayName) (added)")
             } catch {
                 $Results.add("Failed to add permissions for $($svcPrincipalId.displayName): $(Get-NormalizedError -message $_.Exception.Message)")
                 continue
@@ -168,11 +176,25 @@ function Add-CIPPDelegatedPermission {
                 $Results.add("Failed to update permissions for $($svcPrincipalId.displayName): $(Get-NormalizedError -message $_.Exception.Message)")
                 continue
             }
+            # Delegated scopes changed; a cached refresh_token-derived access token still
+            # carries the old scopes, so drop it rather than wait out its TTL.
+            $null = Clear-CippTokenCache -TenantFilter $TenantFilter
             # Added permissions
             $Added = ($Compare | Where-Object { $_.SideIndicator -eq '=>' }).InputObject -join ' '
             $Removed = ($Compare | Where-Object { $_.SideIndicator -eq '<=' }).InputObject -join ' '
+            $AddedCount = @(($Compare | Where-Object { $_.SideIndicator -eq '=>' })).Count
+            $RemovedCount = @(($Compare | Where-Object { $_.SideIndicator -eq '<=' })).Count
             $Results.add("Successfully updated permissions for $($svcPrincipalId.displayName). $(if ($Added) { "Added: $Added"}) $(if ($Removed) { "Removed: $Removed"})")
+            $ChangedResources.Add("$($svcPrincipalId.displayName) (updated: +$AddedCount/-$RemovedCount)")
         }
+    }
+
+    if ($ChangedResources.Count -gt 0) {
+        Write-LogMessage -API 'Add-CIPPDelegatedPermission' -tenant $TenantFilter -message "Updated delegated permissions for $($ourSVCPrincipal.displayName): $($ChangedResources -join '; ')" -Sev 'Info'
+    }
+    $Failures = @($Results | Where-Object { $_ -match '^Failed to' })
+    if ($Failures.Count -gt 0) {
+        Write-LogMessage -API 'Add-CIPPDelegatedPermission' -tenant $TenantFilter -message "Failed during delegated permission update for $($ourSVCPrincipal.displayName): $($Failures.Count) error(s)" -Sev 'Warning' -LogData @{ Failures = $Failures }
     }
 
     return $Results

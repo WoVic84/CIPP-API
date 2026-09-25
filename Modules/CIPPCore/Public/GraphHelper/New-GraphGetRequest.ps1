@@ -18,6 +18,14 @@ function New-GraphGetRequest {
         [switch]$IncludeResponseHeaders,
         [hashtable]$extraHeaders,
         [switch]$ReturnRawResponse,
+        [switch]$SkipValueExtraction,
+        # Emit each page straight to the pipeline instead of buffering the whole
+        # paginated result. Peak memory becomes one page rather than the entire
+        # dataset — use for large collections piped into a streaming consumer
+        # (e.g. Set-CIPPDBCache* | Add-CIPPDbItem). Trade-off: on a mid-pagination
+        # failure, pages already emitted have flowed downstream before the throw.
+        [switch]$Stream,
+        [switch]$UseCertificate,
         $Headers
     )
 
@@ -31,11 +39,10 @@ function New-GraphGetRequest {
         if ($headers) {
             $headers = $Headers
         } else {
-            if ($scope -eq 'ExchangeOnline') {
-                $headers = Get-GraphToken -tenantid $tenantid -scope 'https://outlook.office365.com/.default' -AsApp $asapp -SkipCache $skipTokenCache
-            } else {
-                $headers = Get-GraphToken -tenantid $tenantid -scope $scope -AsApp $asapp -SkipCache $skipTokenCache
-            }
+            $TokenScope = if ($scope -eq 'ExchangeOnline') { 'https://outlook.office365.com/.default' } else { $scope }
+            # -UseCertificate authenticates the app with the SAM certificate instead of the
+            # client secret: delegated (refresh token) by default, app-only with -AsApp $true
+            $headers = Get-GraphToken -tenantid $tenantid -scope $TokenScope -AsApp $asapp -SkipCache $skipTokenCache -UseCertificate:$UseCertificate
         }
         if ($ComplexFilter) {
             $headers['ConsistencyLevel'] = 'eventual'
@@ -53,23 +60,15 @@ function New-GraphGetRequest {
         }
 
         if (!$headers['User-Agent']) {
-            $headers['User-Agent'] = "CIPP/$($global:CippVersion ?? '1.0')"
+            $headers['User-Agent'] = Get-CippUserAgent
         }
 
-        # Track consecutive Graph API failures
-        $TenantsTable = Get-CippTable -tablename Tenants
-        $Filter = "PartitionKey eq 'Tenants' and (defaultDomainName eq '{0}' or customerId eq '{0}')" -f $tenantid
-        $Tenant = Get-CIPPAzDataTableEntity @TenantsTable -Filter $Filter
-        if (!$Tenant) {
-            $Tenant = @{
-                GraphErrorCount = 0
-                LastGraphError  = ''
-                PartitionKey    = 'TenantFailed'
-                RowKey          = 'Failed'
-            }
-        }
 
-        $ReturnedData = do {
+        # Pagination loop. Its per-page output ($data.value etc.) is either buffered
+        # into $ReturnedData and returned (default), or streamed straight to the
+        # pipeline (-Stream). Same loop body either way — see the dispatch below.
+        $Pager = {
+            do {
             $RetryCount = 0
             $MaxRetries = 3
             $RequestSuccessful = $false
@@ -88,7 +87,7 @@ function New-GraphGetRequest {
                         $Data = Invoke-WebRequest @GraphRequest
                     } else {
                         $GraphRequest.ResponseHeadersVariable = 'ResponseHeaders'
-                        $Data = (Invoke-RestMethod @GraphRequest)
+                        $Data = (Invoke-CIPPRestMethod @GraphRequest)
                         $script:LastGraphResponseHeaders = $ResponseHeaders
                     }
 
@@ -117,9 +116,10 @@ function New-GraphGetRequest {
                         $Data.'@odata.count'
                         $NextURL = $null
                     } else {
-                        if ($Data.PSObject.Properties.Name -contains 'value') { $data.value } else { $Data }
+
+                        if (!$SkipValueExtraction -and $Data.PSObject.Properties.Name -contains 'value') { $data.value } else { $Data }
                         if ($noPagination -eq $true) {
-                            if ($Caller -eq 'Get-GraphRequestList') {
+                            if ($Caller -eq 'Get-GraphRequestList' -and $data.'@odata.nextLink') {
                                 @{ 'nextLink' = $data.'@odata.nextLink' }
                             }
                             $nextURL = $null
@@ -172,8 +172,9 @@ function New-GraphGetRequest {
                             $ShouldRetry = $true
                         }
                     }
-                    # Check for "Resource temporarily unavailable"
-                    elseif ($Message -like '*Resource temporarily unavailable*' -or $Message -like '*Too many requests*') {
+                    # Check for "Resource temporarily unavailable" / SharePoint CSOM throttling
+                    # ("Server busy, please retry" is transient and safe to retry).
+                    elseif ($Message -like '*Resource temporarily unavailable*' -or $Message -like '*Too many requests*' -or $Message -like '*Server busy*') {
                         if ($RetryCount -lt $MaxRetries) {
                             $WaitTime = Get-Random -Minimum 1.1 -Maximum 3.1  # Random sleep between 1-2 seconds
                             Write-Warning "Resource temporarily unavailable. Waiting $WaitTime seconds before retry. Attempt $($RetryCount + 1) of $MaxRetries"
@@ -185,33 +186,20 @@ function New-GraphGetRequest {
                         $RetryCount++
                         Start-Sleep -Seconds $WaitTime
                     } else {
-                        # Final failure - update tenant error tracking and throw
-                        if ($Message -ne 'Request not applicable to target tenant.' -and $Tenant) {
-                            $Tenant.LastGraphError = [string]($MessageObj | ConvertTo-Json -Compress)
-                            if ($Tenant.PSObject.Properties.Name -notcontains 'GraphErrorCount') {
-                                $Tenant | Add-Member -MemberType NoteProperty -Name 'GraphErrorCount' -Value 0 -Force
-                            }
-                            $Tenant.GraphErrorCount++
-                            Update-AzDataTableEntity -Force @TenantsTable -Entity $Tenant
-                        }
                         throw $Message
                     }
                 }
             } while (-not $RequestSuccessful -and $RetryCount -le $MaxRetries)
         } until ([string]::IsNullOrEmpty($NextURL) -or $NextURL -is [object[]] -or ' ' -eq $NextURL)
-        if ($Tenant.PSObject.Properties.Name -notcontains 'LastGraphError') {
-            $Tenant | Add-Member -MemberType NoteProperty -Name 'LastGraphError' -Value '' -Force
-        } else {
-            $Tenant.LastGraphError = ''
         }
-        if ($Tenant.PSObject.Properties.Name -notcontains 'GraphErrorCount') {
-            $Tenant | Add-Member -MemberType NoteProperty -Name 'GraphErrorCount' -Value 0 -Force
+
+        if ($Stream) {
+            & $Pager
         } else {
-            $Tenant.GraphErrorCount = 0
+            $ReturnedData = & $Pager
+            return $ReturnedData
         }
-        Update-AzDataTableEntity -Force @TenantsTable -Entity $Tenant
-        return $ReturnedData
     } else {
-        Write-Error 'Not allowed. You cannot manage your own tenant or tenants not under your scope'
+        Write-Error (Get-AuthorisedRequestError -TenantID $tenantid -Context 'Graph request')
     }
 }

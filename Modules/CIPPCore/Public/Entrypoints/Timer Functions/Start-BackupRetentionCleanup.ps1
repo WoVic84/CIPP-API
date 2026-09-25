@@ -6,7 +6,10 @@ function Start-BackupRetentionCleanup {
     This function cleans up old CIPP and Tenant backups based on the retention policy
     #>
     [CmdletBinding(SupportsShouldProcess = $true)]
-    param()
+    param(
+        [Parameter(Mandatory = $false)]
+        [string]$ConnectionString = $env:AzureWebJobsStorage
+    )
 
     try {
         # Get retention settings
@@ -64,12 +67,12 @@ function Start-BackupRetentionCleanup {
                             $BlobDeletedCount++
                             Write-Host "Deleted blob: $BlobPath"
                         } catch {
-                            Write-LogMessage -API 'BackupRetentionCleanup' -message "Failed to delete blob $($Backup.Backup): $($_.Exception.Message)" -sev 'Warn'
+                            Write-LogMessage -API 'BackupRetentionCleanup' -message "Failed to delete blob $($Backup.Backup): $($_.Exception.Message)" -sev 'Warning'
                         }
                     }
                 }
                 # Delete blob table entities
-                Remove-AzDataTableEntity @CIPPBackupTable -Entity $BlobBackups -Force
+                Remove-CIPPAzDataTableEntity @CIPPBackupTable -Entity $BlobBackups -Force
             }
 
             # Delete table-only backups (no blobs)
@@ -79,7 +82,7 @@ function Start-BackupRetentionCleanup {
 
             $TableDeletedCount = 0
             if ($TableBackups) {
-                Remove-AzDataTableEntity @CIPPBackupTable -Entity $TableBackups -Force
+                Remove-CIPPAzDataTableEntity @CIPPBackupTable -Entity $TableBackups -Force
                 $TableDeletedCount = ($TableBackups | Measure-Object).Count
             }
 
@@ -124,12 +127,12 @@ function Start-BackupRetentionCleanup {
                             $BlobDeletedCount++
                             Write-Host "Deleted blob: $BlobPath"
                         } catch {
-                            Write-LogMessage -API 'BackupRetentionCleanup' -message "Failed to delete blob $($Backup.Backup): $($_.Exception.Message)" -sev 'Warn'
+                            Write-LogMessage -API 'BackupRetentionCleanup' -message "Failed to delete blob $($Backup.Backup): $($_.Exception.Message)" -sev 'Warning'
                         }
                     }
                 }
                 # Delete blob table entities
-                Remove-AzDataTableEntity @ScheduledBackupTable -Entity $BlobBackups -Force
+                Remove-CIPPAzDataTableEntity @ScheduledBackupTable -Entity $BlobBackups -Force
             }
 
             # Delete table-only backups (no blobs)
@@ -139,7 +142,7 @@ function Start-BackupRetentionCleanup {
 
             $TableDeletedCount = 0
             if ($TableBackups) {
-                Remove-AzDataTableEntity @ScheduledBackupTable -Entity $TableBackups -Force
+                Remove-CIPPAzDataTableEntity @ScheduledBackupTable -Entity $TableBackups -Force
                 $TableDeletedCount = ($TableBackups | Measure-Object).Count
             }
 

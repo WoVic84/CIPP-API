@@ -26,7 +26,7 @@ function Get-CIPPAzStorageContainer {
     )
 
     begin {
-        function Parse-ConnString {
+        function ConvertFrom-ConnectionString {
             param([string]$Conn)
             $map = @{}
             if (-not $Conn) { return $map }
@@ -103,7 +103,7 @@ function Get-CIPPAzStorageContainer {
     }
 
     process {
-        $connParams = Parse-ConnString -Conn $ConnectionString
+        $connParams = ConvertFrom-ConnectionString -Conn $ConnectionString
         $baseInfo = Get-BlobBaseInfo -ConnParams $connParams
 
         # Determine server-side prefix optimization
@@ -147,7 +147,7 @@ function Get-CIPPAzStorageContainer {
 
         # Optional banner for UX parity when displayed directly
         if ($results.Count -gt 0 -and $baseInfo.Account) {
-            Write-Host "\n   Storage Account Name: $($baseInfo.Account)\n" -ForegroundColor DarkGray
+            Write-Host "Storage Account Name: $($baseInfo.Account)" -ForegroundColor DarkGray
         }
 
         $results

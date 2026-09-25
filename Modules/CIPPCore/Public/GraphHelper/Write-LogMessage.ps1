@@ -44,7 +44,15 @@ function Write-LogMessage {
     if ($sev -eq 'Debug' -and $env:DebugMode -ne $true) {
         return
     }
-    $PartitionKey = (Get-Date -UFormat '%Y%m%d').ToString()
+    $TzId = if ($env:CIPP_TIMEZONE) { $env:CIPP_TIMEZONE } else { 'UTC' }
+    $LocalNow = [TimeZoneInfo]::ConvertTimeBySystemTimeZoneId([DateTime]::UtcNow, $TzId)
+    $PartitionKey = $LocalNow.ToString('yyyyMMdd')
+    # Inverted-ticks RowKey: the table service returns rows in ascending RowKey order, so
+    # (MaxValue - now) makes a partition read newest-first without scanning it whole. The
+    # suffix keeps concurrent writers from colliding; Invoke-ListLogs derives the day
+    # partition back out of the tick prefix. Rows written before this scheme have GUID
+    # RowKeys and simply sort in arbitrary order within their (historical) partitions.
+    $RowKey = '{0:D19}-{1}' -f ([DateTime]::MaxValue.Ticks - [DateTime]::UtcNow.Ticks), [guid]::NewGuid().ToString('N').Substring(0, 12)
     $TableRow = @{
         'Tenant'       = [string]$tenant
         'API'          = [string]$API
@@ -53,7 +61,7 @@ function Write-LogMessage {
         'Severity'     = [string]$sev
         'sentAsAlert'  = $false
         'PartitionKey' = [string]$PartitionKey
-        'RowKey'       = [string]([guid]::NewGuid()).ToString()
+        'RowKey'       = [string]$RowKey
         'FunctionNode' = [string]$env:WEBSITE_SITE_NAME
         'LogData'      = [string]$LogData
     }
@@ -66,18 +74,22 @@ function Write-LogMessage {
     if ($tenantId) {
         $TableRow.Add('TenantID', [string]$tenantId)
     }
-    if ($script:CippStandardInfoStorage -and $script:CippStandardInfoStorage.Value) {
-        $TableRow.Standard = [string]$script:CippStandardInfoStorage.Value.Standard
-        $TableRow.StandardTemplateId = [string]$script:CippStandardInfoStorage.Value.StandardTemplateId
-        if ($script:CippStandardInfoStorage.Value.IntuneTemplateId) {
-            $TableRow.IntuneTemplateId = [string]$script:CippStandardInfoStorage.Value.IntuneTemplateId
+    $StandardInfo = $script:CippStandardInfoStorage.Value
+    if ($StandardInfo) {
+        $TableRow.Standard = [string]$StandardInfo.Standard
+        $TableRow.StandardTemplateId = [string]$StandardInfo.StandardTemplateId
+        if ($StandardInfo.IntuneTemplateId) {
+            $TableRow.IntuneTemplateId = [string]$StandardInfo.IntuneTemplateId
         }
-        if ($script:CippStandardInfoStorage.Value.ConditionalAccessTemplateId) {
-            $TableRow.ConditionalAccessTemplateId = [string]$script:CippStandardInfoStorage.Value.ConditionalAccessTemplateId
+        if ($StandardInfo.ConditionalAccessTemplateId) {
+            $TableRow.ConditionalAccessTemplateId = [string]$StandardInfo.ConditionalAccessTemplateId
         }
     }
-    if ($script:CippScheduledTaskIdStorage -and $script:CippScheduledTaskIdStorage.Value) {
+    if ($script:CippScheduledTaskIdStorage.Value) {
         $TableRow.ScheduledTaskId = [string]$script:CippScheduledTaskIdStorage.Value
+    }
+    if ($script:CippBaselineRunIdStorage.Value) {
+        $TableRow.BaselineRunId = [string]$script:CippBaselineRunIdStorage.Value
     }
 
     $Table.Entity = $TableRow
